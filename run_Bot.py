@@ -1,4 +1,4 @@
-#===== description =====#
+# ===== description ===== #
 """
 DiscordJinroGame
 Copyright (c) 2018 brave99
@@ -11,43 +11,45 @@ Required libraly is only "discord.py"
 Have fun with your BOT!!
 English version is coming soon...
 """
-#===== modules =====#
+# ===== modules ===== #
 import discord
 from time import sleep
-from threading import Thread, Event
+from threading import Thread  # , Event
 from queue import Queue
 import configparser
 import random
 
-#===== global =====#
+# ===== global ===== #
 config = configparser.SafeConfigParser()
-config.read('option.ini', encoding = 'utf8')
+config.read('option.ini', encoding='utf8')
 client = discord.Client()
-GAME = discord.Game(name = "OneNightJinro")
-CHANNEL = None#discord.channel(id=config["BOT"]["CHANNEL"])
+GAME = discord.Game(name="OneNightJinro")
+CHANNEL = None  # discord.channel(id=config["BOT"]["CHANNEL"])
 STARTED = False
 STATEMENT = "hoge"
 send = Queue()
 receive = Queue()
-#receive for discord to game, send for game to discord
+# receive for discord to game, send for game to discord
 
-#===== gameplay =====#
+# ===== gameplay ===== #
 players = []
 
-#===== script =====#
+# ===== script ===== #
 
-#===== bot =====#
+
+# ===== bot ===== #
 @client.event
 async def on_ready():
     global CHANNEL
-    CHANNEL = client.get_channel(config["BOT"]["CHANNEL"])
+    CHANNEL = client.get_channel(int(config["BOT"]["CHANNEL"]))
     print('Logged in as')
     print(client.user.name)
     print(client.user.id)
     print(CHANNEL)
     print('------')
-    await client.send_message(CHANNEL, 'ブンブンハローDISCORD')
-    await client.send_message(CHANNEL, '"/start" でゲームを開始します。\n"/restart"で再起動、"/shutdown"で終了します。')
+    await CHANNEL.send('ブンブンハローDISCORD')
+    await CHANNEL.send('"/start" でゲームを開始します。\n"/restart"で再起動、"/shutdown"で終了します。')
+
 
 @client.event
 async def on_message(message):
@@ -55,8 +57,8 @@ async def on_message(message):
     global CHANNEL
     global players
     if message.content.startswith("/restart"):
-        await client.send_message(message.channel, "I'll be back...")
-        client.change_presence(game = None)
+        await message.channel.send("I'll be back...")
+        client.change_presence(activity=None)
         client.logout()
         client.close()
         sleep(3)
@@ -66,7 +68,7 @@ async def on_message(message):
 
     elif message.content.startswith("/shutdown"):
         if client.user != message.author:
-            await client.send_message(message.channel, "Bye!!")
+            await message.channel.send("Bye!!")
             client.close()
             client.logout()
             exit(0)
@@ -74,10 +76,10 @@ async def on_message(message):
     if not STARTED:
         if message.content.startswith("/start"):
             if client.user != message.author:
-                await client.send_message(CHANNEL, "ワンナイト人狼ゲームを始めます。")
-                await client.change_presence(game = GAME)
-                await client.send_message(CHANNEL, '参加したい人は"/join"と入力。')
-                await client.send_message(CHANNEL, '全員の入力が終わったら"/go"と入力。')
+                await CHANNEL.send("ワンナイト人狼ゲームを始めます。")
+                await client.change_presence(activity=GAME)
+                await CHANNEL.send('参加したい人は"/join"と入力。')
+                await CHANNEL.send('全員の入力が終わったら"/go"と入力。')
                 STARTED = True
 
     elif STARTED:
@@ -87,75 +89,79 @@ async def on_message(message):
                 for player in players:
                     p.append(player.discord)
                 if message.author in p:
-                    await client.send_message(CHANNEL, "{} はもう登録済みです。".format(message.author.name))
+                    await CHANNEL.send("{} はもう登録済みです。".format(message.author.name))
                 else:
                     hoge = Player(message.author)
                     players.append(hoge)
-                    await client.send_message(CHANNEL, "{} を登録しました。".format(send.get()))
+                    await CHANNEL.send("{} を登録しました。".format(send.get()))
 
         elif message.content.startswith("/go"):
-            if len(players)<3:
-                await client.send_message(CHANNEL, "3人以上いないとプレイできません。再度/startからやりなおしてください。")
+            if len(players) < 3:
+                await CHANNEL.send("3人以上いないとプレイできません。再度/startからやりなおしてください。")
             else:
-                await client.send_message(CHANNEL, "全員の準備が完了しました。夜のアクションに入ります。\nアクションはDMで行います。")
+                await CHANNEL.send("全員の準備が完了しました。夜のアクションに入ります。\nアクションはDMで行います。")
                 deck = makeDeck(len(players))
                 playable, remaining = decideRole(deck)
                 for x, player in enumerate(players):
                     player.role = playable[x]
 
                 for player in players:
-                    await client.send_message(player.discord, '{} のターンです。'.format(player.name))
-                    act = Thread(target = player.action, args = (players,remaining,), name = "act")
+                    await player.discord.send('{} のターンです。'.format(player.name))
+                    act = Thread(target=player.action, args=(
+                        players, remaining,), name="act")
                     act.start()
                     while True:
                         state = send.get()
                         if state[0] == "end":
-                            await client.send_message(player.discord, state[1])
+                            await player.discord.send(state[1])
                             break
                         elif state[0] == "exc":
-                            await client.send_message(player.discord, state[1])
+                            await player.discord.send(state[1])
                         else:
-                            await client.send_message(player.discord, state[1])
-                        message = await client.wait_for_message(author = player.discord)#, content=state[0])
+                            await player.discord.send(state[1])
+                        # , content=state[0])
+                        message = await client.wait_for('message', check=lambda m: m.author == player.discord)
                         receive.put(message.content)
 
                 players = swapThief(players)
-                await client.send_message(CHANNEL, '全員のアクションが完了したので、誰を処刑するか話し合いを始めてください。\n話し合いが終わったら"/ready"と入力。')
-                message = await client.wait_for_message(channel = CHANNEL, content = "/ready")
+                await CHANNEL.send('全員のアクションが完了したので、誰を処刑するか話し合いを始めてください。\n話し合いが終わったら"/ready"と入力。')
+                message = await client.wait_for('message', check=lambda m: m.channel == CHANNEL and m.content == "/ready")
 
-                await client.send_message(CHANNEL, 'それでは、投票に入ります。\n投票もDMで行います。')
+                await CHANNEL.send('それでは、投票に入ります。\n投票もDMで行います。')
                 for player in players:
-                    v = Thread(target = vote, args = (player, players, remaining,),name = "vote")
+                    v = Thread(target=vote, args=(
+                        player, players, remaining,), name="vote")
                     v.start()
                     while True:
                         state = send.get()
                         if state[0] == "end":
-                            await client.send_message(player.discord, state[1])
+                            await player.discord.send(state[1])
                             break
                         elif state[0] == "exc":
-                            await client.send_message(player.discord, state[1])
+                            await player.discord.send(state[1])
                         else:
-                            await client.send_message(player.discord, state[1])
-                        message = await client.wait_for_message(author = player.discord)
+                            await player.discord.send(state[1])
+                        message = await client.wait_for('message', check=lambda m: m.author == player.discord)
                         receive.put(message.content)
                 results = getVoteResult(players, playable)
-                await client.send_message(CHANNEL, '全員の投票が終わりました。')
-                await client.send_message(CHANNEL, send.get())
-                await client.send_message(CHANNEL, 'それでは、結果発表です。')
-                getres = Thread(target = getGameresult, args = (players, results, remaining,), name = "getres")
+                await CHANNEL.send('全員の投票が終わりました。')
+                await CHANNEL.send(send.get())
+                await CHANNEL.send('それでは、結果発表です。')
+                getres = Thread(target=getGameresult, args=(
+                    players, results, remaining,), name="getres")
                 getres.start()
                 while True:
                     state = send.get()
                     if state[0] == "end":
-                        await client.send_message(CHANNEL, state[1])
+                        await CHANNEL.send(state[1])
                         break
                     else:
-                        await client.send_message(CHANNEL, state[1])
+                        await CHANNEL.send(state[1])
             STARTED = False
             players = []
 
 
-#===== JinroGame =====#
+# ===== JinroGame ===== #
 class Player():
     def __init__(self, discord):
         self.role = ""
@@ -169,7 +175,9 @@ class Player():
 
     def action(self, players, remaining):
         if self.role == "fortune teller":
-            send.put(["/fortune", 'あなたは##### fortune teller #####です。\n\n占いをするか、残りの2枚のカードを見るか選択してください。\n1 占う\n2 カードを見る'])#\n\n返答は"/fortune [content]"のフォーマットで行ってください。'])
+            # \n\n返答は"/fortune [content]"のフォーマットで行ってください。'])
+            send.put(
+                ["/fortune", 'あなたは##### fortune teller #####です。\n\n占いをするか、残りの2枚のカードを見るか選択してください。\n1 占う\n2 カードを見る'])
             while True:
                 choice = receive.get()
                 if choice not in ["1", "2"]:
@@ -185,8 +193,8 @@ class Player():
                     if player.name == self.name:
                         None
                     else:
-                        sentence += (str(i+1) + " " + player.name + "\n")
-                        list.append(str(i+1))
+                        sentence += (str(i + 1) + " " + player.name + "\n")
+                        list.append(str(i + 1))
                 send.put(["/fortune", sentence])
                 while True:
                     target = receive.get()
@@ -194,18 +202,20 @@ class Player():
                         None
                     elif target in list:
                         target = int(target) - 1
-                        send.put(["end", players[target].name + " を占ったところ、 " + players[target].role + " だとわかりました。\n\nこれであなたのアクションは完了しました。"])
+                        send.put(["end", players[target].name + " を占ったところ、 " +
+                                  players[target].role + " だとわかりました。\n\nこれであなたのアクションは完了しました。"])
                         break
                     else:
                         send.put(["exc", "入力が正しくありません。"])
 
             elif choice == 2:
-                sentence = "残りの2枚のカードは、" + str(remaining) + "です。\n\nこれであなたのアクションは完了しました。"
+                sentence = "残りの2枚のカードは、" + \
+                    str(remaining) + "です。\n\nこれであなたのアクションは完了しました。"
                 send.put(["end", sentence])
 
-
         elif self.role == "werewolf":
-            send.put(["/werewolf", "あなたは##### werewolf #####です。\n仲間を確認するため、カモフラージュも兼ねて何か適当に入力してください。\n"])
+            send.put(
+                ["/werewolf", "あなたは##### werewolf #####です。\n仲間を確認するため、カモフラージュも兼ねて何か適当に入力してください。\n"])
             lonely = True
             sentence = ""
             for player in players:
@@ -219,7 +229,6 @@ class Player():
             sentence += "\nこれであなたのアクションは完了しました。"
             send.put(["end", sentence])
 
-
         elif self.role == "thief":
             sentence = "あなたは##### thief #####です。\n役職を交換したいプレイヤーの番号を入力してください。\n"
             list = []
@@ -227,8 +236,8 @@ class Player():
                 if player.name == self.name:
                     None
                 else:
-                    sentence += (str(i+1) + " " + player.name + "\n")
-                    list.append(str(i+1))
+                    sentence += (str(i + 1) + " " + player.name + "\n")
+                    list.append(str(i + 1))
             send.put(["/thief", sentence])
             while True:
                 target = receive.get()
@@ -240,24 +249,26 @@ class Player():
                     players[target].thiefflag = True
                     self.thiefflag = True
                     self.thiefbuff = newrole
-                    send.put(["end", players[target].name + " からカードを奪い、あなたは " + newrole + " になりました。\nこのことは相手には通知されません。\n\nこれであなたのアクションは完了しました。"])
+                    send.put(["end", players[target].name + " からカードを奪い、あなたは " +
+                              newrole + " になりました。\nこのことは相手には通知されません。\n\nこれであなたのアクションは完了しました。"])
                     break
 
                 else:
                     send.put(["exc", "入力が正しくありません。"])
 
-
         elif self.role == "hangman":
-            send.put(["/hangman", "あなたは##### hangman #####です。\nやることはないので、カモフラージュのために何か適当に打ち込んでください。"])
+            send.put(
+                ["/hangman", "あなたは##### hangman #####です。\nやることはないので、カモフラージュのために何か適当に打ち込んでください。"])
             hoge = receive.get()
             send.put(["end", "\nこれであなたのアクションは完了しました。"])
 
         elif self.role == "citizen":
-            send.put(["/citizen","あなたは##### citizen #####です。\nやることはないので、カモフラージュのために何か適当に打ち込んでください。"])
+            send.put(
+                ["/citizen", "あなたは##### citizen #####です。\nやることはないので、カモフラージュのために何か適当に打ち込んでください。"])
             hoge = receive.get()
             send.put(["end", "\nこれであなたのアクションは完了しました。"])
 
-    def killed(self, players, playable):#returnは勝利プレイヤーの属性
+    def killed(self, players, playable):  # returnは勝利プレイヤーの属性
         if self.role == "hangman":
             return "hangman"
         elif self.role == "werewolf":
@@ -266,6 +277,7 @@ class Player():
             return "nobody"
         else:
             return "werewolf"
+
 
 def makeDeck(num_player):
     num_player = int(num_player)
@@ -280,6 +292,7 @@ def makeDeck(num_player):
             deck.append(i)
     return deck
 
+
 def decideRole(deck):
     random.shuffle(deck)
     playable = deck[:-2]
@@ -287,9 +300,10 @@ def decideRole(deck):
 
     return playable, remaining
 
+
 def swapThief(players):
     for player in players:
-        if player.thiefflag == True:
+        if player.thiefflag:
             if player.role == "thief":
                 player.role = player.thiefbuff
             else:
@@ -297,23 +311,25 @@ def swapThief(players):
 
     return players
 
+
 def vote(player, players, playable):
     sentence = player.name + " さんの投票です。\n投票したいプレイヤーの番号を入力してください。\n"
     list = []
     for x, i in enumerate(players):
         if player.name != i.name:
-            sentence += (str(x+1) + " " + i.name + "\n")
-            list.append(str(x+1))
+            sentence += (str(x + 1) + " " + i.name + "\n")
+            list.append(str(x + 1))
 
     send.put(["/vote", sentence])
     while True:
         tar = receive.get()
         if tar.isdigit() and tar in list:
-            players[int(tar)-1].voted += 1
-            send.put(["end", players[int(tar)-1].name+" に投票しました。"])
+            players[int(tar) - 1].voted += 1
+            send.put(["end", players[int(tar) - 1].name + " に投票しました。"])
             break
         else:
             send.put(["exc", "入力が正しくありません。"])
+
 
 def getVoteResult(players, playable):
     judge = []
@@ -344,17 +360,17 @@ def getVoteResult(players, playable):
     return results
 
 
-def judgement(players, playable):#投票なしの場合
+def judgement(players, playable):  # 投票なしの場合
     sentence = "\nそれでは、処刑するプレイヤーの番号を入力してください。\n平和村だと思う場合は、0を入力してください。\n\n"
     sentence += "0 平和村宣言\n"
     for i, player in enumerate(players):
-        sentence += (str(i+1) + " " + player.name + "\n")
+        sentence += (str(i + 1) + " " + player.name + "\n")
     while True:
         judge = receive.get()
         if judge is None:
             None
         elif judge == "0":
-            send.put(["end","あなたたちは平和村を宣言しました。"])
+            send.put(["end", "あなたたちは平和村を宣言しました。"])
             if "werewolf" not in playable:
                 return "peaceful"
             else:
@@ -362,10 +378,11 @@ def judgement(players, playable):#投票なしの場合
         elif judge not in list:
             send.put(["exc", "入力が正しくありません。"])
         else:
-            send.put(["end", players[int(judge)-1].name + " を処刑します。"])
-            result = players[int(judge)-1].killed(players, playable)
+            send.put(["end", players[int(judge) - 1].name + " を処刑します。"])
+            result = players[int(judge) - 1].killed(players, playable)
             break
     return result
+
 
 def getGameresult(players, results, remaining):
     sentence = ""
@@ -403,9 +420,10 @@ def getGameresult(players, results, remaining):
     send.put(["end", sentence])
 
 
-#===== main =====#
+# ===== main ===== #
 def main():
     client.run(config["BOT"]["TOKEN"])
+
 
 if __name__ == "__main__":
     main()
