@@ -26,7 +26,6 @@ client = discord.Client()
 GAME = discord.Game(name="OneNightJinro")
 CHANNEL = None  # discord.channel(id=config["BOT"]["CHANNEL"])
 STARTED = False
-PLAYING = False
 STATEMENT = "hoge"
 send = Queue()
 receive = Queue()
@@ -57,7 +56,6 @@ async def on_message(message):
     global STARTED
     global CHANNEL
     global players
-    global PLAYING
     if message.content.startswith("/restart"):
         await message.channel.send("I'll be back...")
         client.change_presence(activity=None)
@@ -66,7 +64,6 @@ async def on_message(message):
         sleep(3)
         client.run(config["BOT"]["TOKEN"])
         STARTED = False
-        PLAYING = False
         players = []
 
     elif message.content.startswith("/shutdown"):
@@ -85,7 +82,7 @@ async def on_message(message):
                 await CHANNEL.send('全員の入力が終わったら"/go"と入力。')
                 STARTED = True
 
-    elif not PLAYING and STARTED:
+    elif STARTED:
         if message.content.startswith("/join"):
             if client.user != message.author:
                 p = []
@@ -102,7 +99,6 @@ async def on_message(message):
             if len(players) < 3:
                 await CHANNEL.send("3人以上いないとプレイできません。再度/startからやりなおしてください。")
             else:
-                PLAYING = True
                 await CHANNEL.send("全員の準備が完了しました。夜のアクションに入ります。\nアクションはDMで行います。")
                 deck = makeDeck(len(players))
                 playable, remaining = decideRole(deck)
@@ -162,7 +158,6 @@ async def on_message(message):
                     else:
                         await CHANNEL.send(state[1])
             STARTED = False
-            PLAYING = False
             players = []
 
 
